@@ -1,0 +1,22 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*.so
+
+# Virtual environments
+venv/
+.toongloom-venv/
+*.env
+
+# Data/model files
+data/
+modules/AudioLDM2/audioldm2-venv/
+modules/AudioLDM2/.git/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+modules/AudioLDM2/
+toongloom-venv/
+data/
