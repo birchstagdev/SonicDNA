@@ -1,145 +1,218 @@
-print("music_panel.py loaded")
-from pathlib import Path
-import os
-
-from PySide6.QtCore import Qt, QThread, Signal
+import numpy as np
+import sounddevice as sd
+from scipy.io.wavfile import write as write_wav
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-    QLineEdit, QSpinBox, QPushButton, QFileDialog
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QFileDialog, QComboBox
 )
-from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput
+from PySide6.QtGui import QPainter, QPen, QColor
 
-from modules.audioldm import generate_audio
+SAMPLE_RATE = 44100
+DURATION = 2.0
+FREQ = 440
 
+BASE_SOUNDS = [
+    "Sine Wave",
+    "Square Wave",
+    "Triangle Wave",
+    "Sawtooth Wave",
+    "Pulse Wave",
+    "Supersaw",
+    "Organ (Additive)",
+    "Ring Modulated",
+    "Impulse",
+    "Click",
+    "Burst",
+    "DC Offset",
+    "Silence",
+    "Sample & Hold",
+    "Stepped Random",
+    "Linear Chirp",
+    "White Noise",
+    "Pink Noise",
+    "Brown Noise",
+    "Blue Noise",
+    "Violet Noise",
+    "Grey Noise"
+]
 
-# ---------- Worker thread -----------------------------------------------------
-class AudioGenThread(QThread):
-    finished = Signal(str)           # emitted with output WAV path
-    error = Signal(str)              # emitted with str(error)
+def gen_wave(wave_type, volume=0.8):
+    t = np.linspace(0, DURATION, int(SAMPLE_RATE * DURATION), endpoint=False)
+    if wave_type == "Sine Wave":
+        return volume * np.sin(2 * np.pi * FREQ * t)
+    elif wave_type == "Square Wave":
+        return volume * np.sign(np.sin(2 * np.pi * FREQ * t))
+    elif wave_type == "Triangle Wave":
+        return volume * (2 * np.abs(2 * ((t * FREQ) % 1) - 1) - 1)
+    elif wave_type == "Sawtooth Wave":
+        return volume * (2 * ((t * FREQ) % 1) - 1)
+    elif wave_type == "Pulse Wave":
+        pulse_width = 0.2
+        return volume * np.where((t * FREQ) % 1 < pulse_width, 1, -1)
+    elif wave_type == "Supersaw":
+        detune = [FREQ*0.98, FREQ*0.99, FREQ, FREQ*1.01, FREQ*1.02]
+        sum_saws = sum(np.sin(2 * np.pi * d * t) for d in detune)
+        return volume * (sum_saws / len(detune))
+    elif wave_type == "Organ (Additive)":
+        harmonics = [1, 2, 3, 4, 5]
+        amps = [1.0, 0.5, 0.25, 0.13, 0.06]
+        organ = sum(a * np.sin(2 * np.pi * FREQ * h * t) for a, h in zip(amps, harmonics))
+        return volume * (organ / sum(amps))
+    elif wave_type == "Ring Modulated":
+        mod_freq = 55
+        return volume * np.sin(2 * np.pi * FREQ * t) * np.sin(2 * np.pi * mod_freq * t)
+    elif wave_type == "Impulse":
+        data = np.zeros_like(t)
+        data[0] = 1
+        return volume * data
+    elif wave_type == "Click":
+        data = np.zeros_like(t)
+        data[:int(0.002 * SAMPLE_RATE)] = 1
+        return volume * data
+    elif wave_type == "Burst":
+        data = np.zeros_like(t)
+        burst_len = int(0.1 * SAMPLE_RATE)
+        data[:burst_len] = np.sin(2 * np.pi * FREQ * t[:burst_len])
+        return volume * data
+    elif wave_type == "DC Offset":
+        return volume * np.ones_like(t)
+    elif wave_type == "Silence":
+        return np.zeros_like(t)
+    elif wave_type == "Sample & Hold":
+        steps = 32
+        step_len = len(t) // steps
+        vals = np.random.uniform(-1, 1, steps)
+        data = np.repeat(vals, step_len)
+        data = np.pad(data, (0, len(t) - len(data)))
+        return volume * data
+    elif wave_type == "Stepped Random":
+        steps = 16
+        idx = np.floor(np.linspace(0, steps, len(t))).astype(int)
+        vals = np.random.uniform(-1, 1, steps+1)
+        return volume * vals[idx]
+    elif wave_type == "Linear Chirp":
+        f0, f1 = 220, 1760
+        chirp = np.sin(2 * np.pi * (f0 + (f1 - f0) * t / DURATION / 2) * t)
+        return volume * chirp
+    elif wave_type == "White Noise":
+        return volume * np.random.uniform(-1, 1, len(t))
+    elif wave_type == "Pink Noise":
+        nrows, ncols = 16, len(t)
+        array = np.random.randn(nrows, ncols)
+        array = np.cumsum(array, axis=0)
+        pink = array[-1] / np.max(np.abs(array[-1]))
+        return volume * pink
+    elif wave_type == "Brown Noise":
+        wn = np.random.uniform(-1, 1, len(t))
+        brown = np.cumsum(wn)
+        brown = brown / np.max(np.abs(brown))
+        return volume * brown
+    elif wave_type == "Blue Noise":
+        white = np.random.normal(0, 1, len(t))
+        fft = np.fft.rfft(white)
+        freqs = np.fft.rfftfreq(len(white), 1 / SAMPLE_RATE)
+        fft *= np.sqrt(freqs)
+        blue = np.fft.irfft(fft)
+        blue = blue / np.max(np.abs(blue))
+        return volume * blue
+    elif wave_type == "Violet Noise":
+        white = np.random.normal(0, 1, len(t))
+        fft = np.fft.rfft(white)
+        freqs = np.fft.rfftfreq(len(white), 1 / SAMPLE_RATE)
+        fft *= freqs
+        violet = np.fft.irfft(fft)
+        violet = violet / np.max(np.abs(violet))
+        return volume * violet
+    elif wave_type == "Grey Noise":
+        white = np.random.normal(0, 1, len(t))
+        eq_curve = np.linspace(0.6, 1.2, len(white))
+        return volume * (white * eq_curve / np.max(np.abs(white * eq_curve)))
+    else:
+        return np.zeros_like(t)
 
-    def __init__(self, prompt: str, length: int):
+class WaveformWidget(QWidget):
+    def __init__(self):
         super().__init__()
-        self.prompt = prompt
-        self.length = length
-        self.out_path: str | None = None
+        self.data = np.zeros(512)
+        self.setMinimumHeight(140)
 
-    def run(self):
-        try:
-            self.out_path = generate_audio(self.prompt, self.length)
-            self.finished.emit(self.out_path)
-        except Exception as e:  # pylint: disable=broad-except
-            self.error.emit(str(e))
+    def set_wave(self, data):
+        self.data = data[:512] if len(data) > 512 else np.pad(data, (0, max(0, 512 - len(data))))
+        self.update()
 
+    def paintEvent(self, event):
+        qp = QPainter(self)
+        qp.fillRect(event.rect(), Qt.black)
+        w, h = self.width(), self.height()
+        pen = QPen(QColor(0, 220, 255), 2)
+        qp.setPen(pen)
+        mid = h // 2
+        N = len(self.data)
+        for i in range(1, N):
+            x0 = int((i-1) * w / N)
+            y0 = int(mid - self.data[i-1] * (h//2 - 10))
+            x1 = int(i * w / N)
+            y1 = int(mid - self.data[i] * (h//2 - 10))
+            qp.drawLine(x0, y0, x1, y1)
 
-# ---------- Main panel --------------------------------------------------------
 class MusicPanel(QWidget):
     def __init__(self):
         super().__init__()
         layout = QVBoxLayout(self)
 
-        # ── Top controls ───────────────────────────────────────────────────────
+        # Dropdown for sound selection
         top = QHBoxLayout()
-        self.prompt = QLineEdit()
-        self.prompt.setPlaceholderText("Describe your music (e.g., 'dark, ambient, synth, no drums')")
-        self.prompt.setMinimumWidth(350)
-
-        self.length = QSpinBox()
-        self.length.setRange(5, 60)
-        self.length.setValue(30)
-        self.length.setSuffix(" sec")
-        self.length.setFixedWidth(80)
-
-        self.gen_btn = QPushButton("Generate")
-        self.gen_btn.setFixedWidth(90)
-
-        top.addWidget(QLabel("Prompt:"))
-        top.addWidget(self.prompt, 2)
-        top.addWidget(QLabel("Length:"))
-        top.addWidget(self.length)
-        top.addWidget(self.gen_btn)
+        self.sound_selector = QComboBox()
+        self.sound_selector.addItems(BASE_SOUNDS)
+        top.addWidget(QLabel("Base Sound:"))
+        top.addWidget(self.sound_selector)
         layout.addLayout(top)
 
-        # ── Status / waveform placeholder ─────────────────────────────────────
-        self.status = QLabel("Ready.")
-        layout.addWidget(self.status)
+        # Waveform display
+        self.waveform = WaveformWidget()
+        layout.addWidget(self.waveform)
 
-        wave_box = QVBoxLayout()
-        wave_box.addStretch(2)
-        self.waveform = QLabel("Waveform will appear here")
-        self.waveform.setAlignment(Qt.AlignCenter)
-        self.waveform.setStyleSheet(
-            "background:#222; color:#aaa; border:1px solid #444; "
-            "min-height:60px; min-width:380px;"
-        )
-        wave_box.addWidget(self.waveform, alignment=Qt.AlignCenter)
-        wave_box.addStretch(3)
-        layout.addLayout(wave_box)
-
-        # ── Player controls ───────────────────────────────────────────────────
-        play_row = QHBoxLayout()
+        # Play/Pause button
         self.play_btn = QPushButton("Play")
-        self.stop_btn = QPushButton("Stop")
-        self.open_btn = QPushButton("Open File")
-        self.file_label = QLabel("(No file loaded)")
+        layout.addWidget(self.play_btn)
 
-        play_row.addWidget(self.play_btn)
-        play_row.addWidget(self.stop_btn)
-        play_row.addWidget(self.open_btn)
-        play_row.addWidget(self.file_label)
-        layout.addLayout(play_row)
+        #Download Audio
+        self.download_btn = QPushButton("Download")
+        layout.addWidget(self.download_btn)
+        self.download_btn.clicked.connect(self.download_wave)
 
-        # ── QMediaPlayer setup ────────────────────────────────────────────────
-        self.player = QMediaPlayer()
-        self.audio_out = QAudioOutput()
-        self.player.setAudioOutput(self.audio_out)
-        self.filepath: str | None = None
+        # State
+        self.current_wave = None
+        self.is_playing = False
 
-        # ── Signals ───────────────────────────────────────────────────────────
-        self.gen_btn.clicked.connect(self.start_generation)
-        self.play_btn.clicked.connect(self.play_audio)
-        self.stop_btn.clicked.connect(self.player.stop)
-        self.open_btn.clicked.connect(self.open_file)
+        # Signals
+        self.sound_selector.currentTextChanged.connect(self.update_waveform)
+        self.play_btn.clicked.connect(self.toggle_play)
 
-    # --------------------------------------------------------------------- UI
-    def start_generation(self):
-        prompt = self.prompt.text().strip()
-        if not prompt:
-            self.status.setText("⚠️  Enter a prompt first.")
-            return
+        self.update_waveform()  # Initialize display
 
-        length = self.length.value()
-        self.status.setText("⏳ Generating… this may take a few minutes.")
-        self.gen_btn.setEnabled(False)
+    def update_waveform(self):
+        wave_type = self.sound_selector.currentText()
+        data = gen_wave(wave_type)
+        self.current_wave = data
+        self.waveform.set_wave(data)
+        if self.is_playing:
+            self.toggle_play()  # Stop if user changes wave while playing
 
-        self.worker = AudioGenThread(prompt, length)
-        self.worker.finished.connect(self.generation_done)
-        self.worker.error.connect(self.generation_error)
-        self.worker.start()
+    def toggle_play(self):
+        if not self.is_playing:
+            self.is_playing = True
+            self.play_btn.setText("Pause")
+            sd.play(self.current_wave, samplerate=SAMPLE_RATE)
+        else:
+            self.is_playing = False
+            self.play_btn.setText("Play")
+            sd.stop()
 
-    def generation_done(self, wav_path: str):
-        self.gen_btn.setEnabled(True)
-        self.status.setText(f"✅ Generated: {Path(wav_path).name}")
-        self.file_label.setText(Path(wav_path).name)
-        self.filepath = wav_path
-        self.player.setSource(wav_path)
-        # TODO: draw waveform preview here
-
-    def generation_error(self, err: str):
-        self.gen_btn.setEnabled(True)
-        self.status.setText(f"❌ Error: {err}")
-
-    # ----------------------------------------------------------------- Player
-    def play_audio(self):
-        if self.filepath:
-            self.player.setSource(self.filepath)
-            self.player.play()
-
-    # ------------------------------------------------------------------ Utils
-    def open_file(self):
-        file, _ = QFileDialog.getOpenFileName(
-            self, "Select audio file", "", "Audio Files (*.wav *.mp3)"
-        )
-        if file:
-            self.filepath = file
-            self.file_label.setText(Path(file).name)
-            self.player.setSource(file)
+    def download_wave(self):
+        if self.current_wave is not None:
+            file_path, _ = QFileDialog.getSaveFileName(self, "Save WAV File", "sound.wav", "WAV Files (*.wav)")
+            if file_path:
+                # Normalize to 16-bit PCM for WAV export
+                audio = (self.current_wave * 32767).astype(np.int16)
+                write_wav(file_path, SAMPLE_RATE, audio)
