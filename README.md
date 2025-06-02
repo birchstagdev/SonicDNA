@@ -5,13 +5,13 @@
 
 ---
 
-## 🚧 Project Status: Planning Phase
+## 🚦 Project Status: Rule Definition Phase
 
-> ⚠️ **This project is currently in the planning and prototyping stage.**
+> 🚩 **Major Update (June 2025): Core rulesets for audio DNA sequencing are now complete!**
 >
-> - The ideas, architecture, and folder structure are being laid out now.
-> - **No functional audio encoding, generation, or DNA agents are implemented yet.**
-> - This repo is being used to solidify the design, version control early experiments, and invite feedback as the groundwork is laid.
+> - All primary variable rules and serialization formats (see `rules_*.json`) are now fully specified.
+> - These rules form the backbone for future audio DNA extraction agents, generators, and format encoders.
+> - Functional implementation of DNA agents, audio encoding, and the generative engine are next.
 
 ---
 
@@ -29,10 +29,28 @@ SonicDNA will eventually provide:
 
 - [x] Modular folder/project structure defined
 - [x] Basic GUI and PySide6 skeleton
+- [x] **Audio DNA variable rulesets complete (`rules_*.json`)**
 - [ ] Audio DNA extraction agents (**not implemented**)
 - [ ] DNA-to-audio generative engine (**not implemented**)
 - [ ] Rule-based validation and dataset building (**not implemented**)
 - [ ] Audio compression experiments (**not implemented**)
+
+---
+
+## Audio DNA Rulesets
+
+A full set of JSON files—one for each major audio property—now defines the "genome" for audio DNA sequencing.
+
+**Find them in the repo as:**  
+`rules_Volume.json`, `rules_Frequency.json`, `rules_Clarity.json`, `rules_Timbre.json`, `rules_Envelope.json`, `rules_Dynamics.json`,  
+`rules_Emotion.json`, `rules_Macro_Intensity.json`, `rules_Perceived_Pitch.json`, `rules_Noise_Texture.json`, `rules_Wavelength.json`,  
+`rules_Texture_Complexity.json`, `rules_Harmonicity.json`, `rules_Transients.json`, `rules_Phase_Spatial.json`, `rules_Resonance_Damping.json`,  
+`rules_Glide_Slur.json`, `rules_Effect_Artifact.json`, `rules_Formant_Structure.json`
+
+Each file:
+- Defines precise encoding/decoding structure for its audio property
+- Documents all sub-variables, data ranges, padding, and serialization order
+- Will be directly used by future agent scripts for feature extraction, validation, and synthesis
 
 ---
 
