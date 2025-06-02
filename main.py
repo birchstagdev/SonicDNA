@@ -34,7 +34,7 @@ import threading
 import argparse
 
 # ─── Import the batch parser and the GUI window ───────────────────────────────
-from dna_ui import main as run_batch    # dna_ui.main() does: read toSequence.txt → parse → write JSON/CSV
+from utils.dna_ui import main as run_batch
 from PySide6.QtWidgets import QApplication
 from ui.main_window import MainWindow
 

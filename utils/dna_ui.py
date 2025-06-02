@@ -2,7 +2,7 @@
 import os
 import json
 import csv
-from dna_calculator import DNACalculator, RuleParseError
+from utils.dna_calculator import DNACalculator
 
 def ensure_folder(path):
     if not os.path.isdir(path):
@@ -37,7 +37,7 @@ def flatten_parsed(rule_name, values_dict, parent_key=''):
 
 def main():
     # Determine file paths
-    project_root = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.getcwd()
     raw_folder = os.path.join(project_root, 'data', 'raw')
     output_folder = os.path.join(project_root, 'data', 'output')
     ensure_folder(output_folder)
