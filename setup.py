@@ -8,7 +8,11 @@ setup(
         "PySide6",
         "torch",
         "torchaudio",
-        "audioldm2"
+        "numpy",
+        "scipy",
+        "sounddevice",
+        "watchdog",
+        "requests"
     ],
     entry_points={
         "console_scripts": [
@@ -18,4 +22,6 @@ setup(
     author="Your Name",
     description="SonicDNA and generative music app.",
     python_requires=">=3.10",
+)
+
 )
